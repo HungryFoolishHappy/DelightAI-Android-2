@@ -5,11 +5,12 @@ import com.example.delightAI.model.DelightRequest
 import com.example.delightAI.model.DelightRequestMessage
 import com.example.delightAI.model.DelightRequestMessageFrom
 import com.example.delightAI.model.DelightResponse
-import com.example.delightAI.model.DelightAIError
 import com.example.delightAI.service.DelightAIService
+import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.net.URLDecoder
@@ -21,8 +22,7 @@ internal class DelightAIRepository {
 
     suspend fun sendChat(text: String, webhook_id: String, user_id: String, username: String, message_id: String): DelightResponse? {
 
-        var webhook_id = webhook_id
-        var delightRequest = DelightRequest(message = DelightRequestMessage(
+        val delightRequest = DelightRequest(message = DelightRequestMessage(
             message_id = message_id,
             date = System.currentTimeMillis(),
             text = text,
@@ -33,7 +33,7 @@ internal class DelightAIRepository {
             val response = it.sendChat(delightRequest, webhook_id)
 
             if (!response.isSuccessful()) {
-                print("Send Chat Error")
+                return handleError(response, DelightResponse::class.java)
             }
 
             return response.body()
@@ -49,11 +49,21 @@ internal class DelightAIRepository {
             val response = it.polling(decodedUrl)
 
             if (!response.isSuccessful()) {
-                print("Polling Error")
+                return handleError(response, DelightPollingResponse::class.java)
             }
             return response.body()
         }
         return null
+    }
+
+    private fun <T> handleError(response: Response<T>, classOfT: Class<T>): T? {
+        return try {
+            val errorString = response.errorBody()?.string()
+            Gson().fromJson(errorString, classOfT)
+        } catch (e: Exception) {
+            println("unable to parse error body, $e")
+            null
+        }
     }
 
     private fun getApiService(): DelightAIService? {
